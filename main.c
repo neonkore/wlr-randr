@@ -373,6 +373,7 @@ static const struct option long_options[] = {
 	{"output", required_argument, 0, 0},
 	{"on", no_argument, 0, 0},
 	{"off", no_argument, 0, 0},
+	{"toggle", no_argument, 0, 0},
 	{"mode", required_argument, 0, 0},
 	{"preferred", no_argument, 0, 0},
 	{"custom-mode", required_argument, 0, 0},
@@ -466,6 +467,13 @@ static bool parse_output_arg(struct randr_head *head,
 		head->enabled = true;
 	} else if (strcmp(name, "off") == 0) {
 		head->enabled = false;
+	} else if (strcmp(name, "toggle") == 0) {
+		if (head->enabled) {
+			head->enabled = false;
+		} else {
+			fixup_disabled_head(head);
+			head->enabled = true;
+		}
 	} else if (strcmp(name, "mode") == 0) {
 		int width, height, refresh;
 		if (!parse_mode(value, &width, &height, &refresh)) {
@@ -578,6 +586,7 @@ static const char usage[] =
 	"--output <name>\n"
 	"  --on\n"
 	"  --off\n"
+	"  --toggle\n"
 	"  --mode|--custom-mode <width>x<height>[@<refresh>Hz]\n"
 	"  --preferred\n"
 	"  --pos <x>,<y>\n"
