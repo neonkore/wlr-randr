@@ -29,6 +29,7 @@ struct randr_head {
 	struct wl_list link;
 
 	char *name, *description;
+	char *make, *model, *serial_number;
 	int32_t phys_width, phys_height; // mm
 	struct wl_list modes;
 
@@ -67,11 +68,20 @@ static void print_state(struct randr_state *state) {
 	struct randr_head *head;
 	wl_list_for_each(head, &state->heads, link) {
 		printf("%s \"%s\"\n", head->name, head->description);
+
+		if (zwlr_output_manager_v1_get_version(state->output_manager) >= 2) {
+			printf("  Make: %s\n", head->make);
+			printf("  Model: %s\n", head->model);
+			printf("  Serial: %s\n", head->serial_number);
+		}
+
 		if (head->phys_width > 0 && head->phys_height > 0) {
 			printf("  Physical size: %dx%d mm\n",
 				head->phys_width, head->phys_height);
 		}
+
 		printf("  Enabled: %s\n", head->enabled ? "yes" : "no");
+
 		if (!wl_list_empty(&head->modes)) {
 			printf("  Modes:\n");
 			struct randr_mode *mode;
@@ -300,6 +310,24 @@ static void head_handle_finished(void *data,
 	free(head);
 }
 
+static void head_handle_make(void *data,
+		struct zwlr_output_head_v1 *wlr_head, const char *make) {
+	struct randr_head *head = data;
+	head->make = strdup(make);
+}
+
+static void head_handle_model(void *data,
+		struct zwlr_output_head_v1 *wlr_head, const char *model) {
+	struct randr_head *head = data;
+	head->model = strdup(model);
+}
+
+static void head_handle_serial_number(void *data,
+		struct zwlr_output_head_v1 *wlr_head, const char *serial_number) {
+	struct randr_head *head = data;
+	head->serial_number = strdup(serial_number);
+}
+
 static const struct zwlr_output_head_v1_listener head_listener = {
 	.name = head_handle_name,
 	.description = head_handle_description,
@@ -311,6 +339,9 @@ static const struct zwlr_output_head_v1_listener head_listener = {
 	.transform = head_handle_transform,
 	.scale = head_handle_scale,
 	.finished = head_handle_finished,
+	.make = head_handle_make,
+	.model = head_handle_model,
+	.serial_number = head_handle_serial_number,
 };
 
 static void output_manager_handle_head(void *data,
@@ -350,8 +381,9 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
 	struct randr_state *state = data;
 
 	if (strcmp(interface, zwlr_output_manager_v1_interface.name) == 0) {
+		uint32_t version_to_bind = version <= 2 ? version : 2;
 		state->output_manager = wl_registry_bind(registry, name,
-			&zwlr_output_manager_v1_interface, 1);
+			&zwlr_output_manager_v1_interface, version_to_bind);
 		zwlr_output_manager_v1_add_listener(state->output_manager,
 			&output_manager_listener, state);
 	}
