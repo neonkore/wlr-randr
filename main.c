@@ -42,6 +42,7 @@ struct randr_head {
 	int32_t x, y;
 	enum wl_output_transform transform;
 	double scale;
+	enum zwlr_output_head_v1_adaptive_sync_state adaptive_sync_state;
 };
 
 struct randr_state {
@@ -115,6 +116,17 @@ static void print_state(struct randr_state *state) {
 		printf("  Position: %d,%d\n", head->x, head->y);
 		printf("  Transform: %s\n", output_transform_map[head->transform]);
 		printf("  Scale: %f\n", head->scale);
+
+		if (zwlr_output_manager_v1_get_version(state->output_manager) >= 4) {
+			switch (head->adaptive_sync_state) {
+			case ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_ENABLED:
+				printf("  Adaptive Sync: enabled\n");
+				break;
+			case ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_DISABLED:
+				printf("  Adaptive Sync: disabled\n");
+				break;
+			}
+		}
 	}
 
 	state->running = false;
@@ -182,6 +194,11 @@ static void apply_state(struct randr_state *state, bool dry_run) {
 			head->transform);
 		zwlr_output_configuration_head_v1_set_scale(config_head,
 			wl_fixed_from_double(head->scale));
+
+		if (zwlr_output_manager_v1_get_version(state->output_manager) >= 4) {
+			zwlr_output_configuration_head_v1_set_adaptive_sync(config_head,
+				head->adaptive_sync_state);
+		}
 	}
 
 	if (dry_run) {
@@ -336,6 +353,12 @@ static void head_handle_serial_number(void *data,
 	head->serial_number = strdup(serial_number);
 }
 
+static void head_handle_adaptive_sync(void *data,
+		struct zwlr_output_head_v1 *wlr_head, uint32_t state) {
+	struct randr_head *head = data;
+	head->adaptive_sync_state = state;
+}
+
 static const struct zwlr_output_head_v1_listener head_listener = {
 	.name = head_handle_name,
 	.description = head_handle_description,
@@ -350,6 +373,7 @@ static const struct zwlr_output_head_v1_listener head_listener = {
 	.make = head_handle_make,
 	.model = head_handle_model,
 	.serial_number = head_handle_serial_number,
+	.adaptive_sync = head_handle_adaptive_sync,
 };
 
 static void output_manager_handle_head(void *data,
@@ -389,7 +413,7 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
 	struct randr_state *state = data;
 
 	if (strcmp(interface, zwlr_output_manager_v1_interface.name) == 0) {
-		uint32_t version_to_bind = version <= 3 ? version : 3;
+		uint32_t version_to_bind = version <= 4 ? version : 4;
 		state->output_manager = wl_registry_bind(registry, name,
 			&zwlr_output_manager_v1_interface, version_to_bind);
 		zwlr_output_manager_v1_add_listener(state->output_manager,
@@ -420,6 +444,7 @@ static const struct option long_options[] = {
 	{"pos", required_argument, 0, 0},
 	{"transform", required_argument, 0, 0},
 	{"scale", required_argument, 0, 0},
+	{"adaptive-sync", required_argument, 0, 0},
 	{0},
 };
 
@@ -611,6 +636,19 @@ static bool parse_output_arg(struct randr_head *head,
 		}
 
 		head->scale = scale;
+	} else if (strcmp(name, "adaptive-sync") == 0) {
+		if (zwlr_output_head_v1_get_version(head->wlr_head) < 4) {
+			fprintf(stderr, "setting adaptive sync not supported by the compositor\n");
+			return false;
+		}
+		if (strcmp(value, "enabled") == 0) {
+			head->adaptive_sync_state = ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_ENABLED;
+		} else if (strcmp(value, "disabed") == 0) {
+			head->adaptive_sync_state = ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_DISABLED;
+		} else {
+			fprintf(stderr, "invalid adaptive sync state: %s\n", value);
+			return false;
+		}
 	} else {
 		fprintf(stderr, "invalid option: %s\n", name);
 		return false;
@@ -631,7 +669,8 @@ static const char usage[] =
 	"  --preferred\n"
 	"  --pos <x>,<y>\n"
 	"  --transform normal|90|180|270|flipped|flipped-90|flipped-180|flipped-270\n"
-	"  --scale <factor>\n";
+	"  --scale <factor>\n"
+	"  --adaptive-sync enabled|disabled\n";
 
 int main(int argc, char *argv[]) {
 	struct randr_state state = { .running = true };
