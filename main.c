@@ -643,7 +643,7 @@ static bool parse_output_arg(struct randr_head *head,
 		}
 		if (strcmp(value, "enabled") == 0) {
 			head->adaptive_sync_state = ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_ENABLED;
-		} else if (strcmp(value, "disabed") == 0) {
+		} else if (strcmp(value, "disabled") == 0) {
 			head->adaptive_sync_state = ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_DISABLED;
 		} else {
 			fprintf(stderr, "invalid adaptive sync state: %s\n", value);
