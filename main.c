@@ -273,7 +273,7 @@ static void head_handle_mode(void *data,
 	struct randr_mode *mode = calloc(1, sizeof(*mode));
 	mode->head = head;
 	mode->wlr_mode = wlr_mode;
-	wl_list_insert(&head->modes, &mode->link);
+	wl_list_insert(head->modes.prev, &mode->link);
 
 	zwlr_output_mode_v1_add_listener(wlr_mode, &mode_listener, mode);
 }
@@ -386,7 +386,7 @@ static void output_manager_handle_head(void *data,
 	head->wlr_head = wlr_head;
 	head->scale = 1.0;
 	wl_list_init(&head->modes);
-	wl_list_insert(&state->heads, &head->link);
+	wl_list_insert(state->heads.prev, &head->link);
 
 	zwlr_output_head_v1_add_listener(wlr_head, &head_listener, head);
 }
