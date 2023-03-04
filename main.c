@@ -754,7 +754,21 @@ int main(int argc, char *argv[]) {
 		// This space intentionally left blank
 	}
 
-	// TODO: destroy heads
+	struct randr_head *head, *tmp_head;
+	wl_list_for_each_safe(head, tmp_head, &state.heads, link) {
+		struct randr_mode *mode, *tmp_mode;
+		wl_list_for_each_safe(mode, tmp_mode, &head->modes, link) {
+			zwlr_output_mode_v1_destroy(mode->wlr_mode);
+			free(mode);
+		}
+		zwlr_output_head_v1_destroy(head->wlr_head);
+		free(head->name);
+		free(head->description);
+		free(head->make);
+		free(head->model);
+		free(head->serial_number);
+		free(head);
+	}
 	zwlr_output_manager_v1_destroy(state.output_manager);
 	wl_registry_destroy(registry);
 	wl_display_disconnect(display);
