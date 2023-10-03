@@ -50,6 +50,7 @@ struct randr_state {
 
 	struct wl_list heads;
 	uint32_t serial;
+	bool has_serial;
 	bool running;
 	bool failed;
 };
@@ -395,6 +396,7 @@ static void output_manager_handle_done(void *data,
 		struct zwlr_output_manager_v1 *manager, uint32_t serial) {
 	struct randr_state *state = data;
 	state->serial = serial;
+	state->has_serial = true;
 }
 
 static void output_manager_handle_finished(void *data,
@@ -693,7 +695,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	while (state.serial == 0) {
+	while (!state.has_serial) {
 		if (wl_display_dispatch(display) < 0) {
 			fprintf(stderr, "wl_display_dispatch failed\n");
 			return EXIT_FAILURE;
