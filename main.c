@@ -133,6 +133,153 @@ static void print_state(struct randr_state *state) {
 	state->running = false;
 }
 
+static void print_json_optional_string(const char *str) {
+	if (str == NULL) {
+		printf("null");
+		return;
+	}
+
+	printf("\"");
+	for (size_t i = 0; str[i] != '\0'; i++) {
+		char ch = str[i];
+		switch (ch) {
+		case '"':
+			printf("\\\"");
+			break;
+		case '\\':
+			printf("\\\\");
+			break;
+		case '\b':
+			printf("\\b");
+			break;
+		case '\f':
+			printf("\\f");
+			break;
+		case '\n':
+			printf("\\n");
+			break;
+		case '\r':
+			printf("\\r");
+			break;
+		case '\t':
+			printf("\\t");
+			break;
+		default:
+			if (ch > 0 && ch < 0x20) {
+				printf("\\u%04x", ch);
+			} else {
+				printf("%c", ch);
+			}
+		}
+	}
+	printf("\"");
+}
+
+static void print_state_json(struct randr_state *state) {
+	uint32_t version = zwlr_output_manager_v1_get_version(state->output_manager);
+
+	printf("[");
+
+	size_t heads_count = 0;
+	struct randr_head *head;
+	wl_list_for_each(head, &state->heads, link) {
+		if (heads_count++) {
+			printf(",");
+		}
+		printf("\n  {\n");
+
+		printf("    \"name\": ");
+		print_json_optional_string(head->name);
+		printf(",\n");
+
+		printf("    \"description\": ");
+		print_json_optional_string(head->description);
+		printf(",\n");
+
+		printf("    \"make\": ");
+		print_json_optional_string(head->make);
+		printf(",\n");
+
+		printf("    \"model\": ");
+		print_json_optional_string(head->model);
+		printf(",\n");
+
+		printf("    \"serial\": ");
+		print_json_optional_string(head->serial_number);
+		printf(",\n");
+
+		printf("    \"physical_size\": {\n");
+		printf("      \"width\": %d,\n", head->phys_width);
+		printf("      \"height\": %d\n", head->phys_height);
+		printf("    },\n");
+
+		printf("    \"enabled\": %s,\n", head->enabled ? "true" : "false");
+
+		printf("    \"modes\": [");
+
+		size_t modes_count = 0;
+		struct randr_mode *mode;
+		wl_list_for_each(mode, &head->modes, link) {
+			if (modes_count++) {
+				printf(",");
+			}
+			printf("\n      {\n");
+
+			printf("        \"width\": %d,\n", mode->width);
+			printf("        \"height\": %d,\n", mode->height);
+			printf("        \"refresh\": %f,\n", (float)mode->refresh / 1000);
+			printf("        \"preferred\": %s,\n", mode->preferred ? "true" : "false");
+			printf("        \"current\": %s\n", head->mode == mode ? "true" : "false");
+
+			printf("      }");
+		}
+
+		if (modes_count) {
+			printf("\n    ");
+		}
+		printf("]");
+
+		if (!head->enabled) {
+			printf("\n");
+		} else {
+			printf(",\n");
+
+			printf("    \"position\": {\n");
+			printf("      \"x\": %d,\n", head->x);
+			printf("      \"y\": %d\n", head->y);
+			printf("    },\n");
+
+			printf("    \"transform\": ");
+			print_json_optional_string(output_transform_map[head->transform]);
+			printf(",\n");
+
+			printf("    \"scale\": %f,\n", head->scale);
+
+			char *adaptive_sync = "null";
+			if (version >= 4) {
+				switch (head->adaptive_sync_state) {
+				case ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_ENABLED:
+					adaptive_sync = "true";
+					break;
+				case ZWLR_OUTPUT_HEAD_V1_ADAPTIVE_SYNC_STATE_DISABLED:
+					adaptive_sync = "false";
+					break;
+				}
+			}
+			printf("    \"adaptive_sync\": %s\n", adaptive_sync);
+		}
+
+		printf("  }");
+	}
+
+	if (heads_count) {
+		printf("\n");
+	}
+	printf("]\n");
+
+	state->running = false;
+}
+
 static void config_handle_succeeded(void *data,
 		struct zwlr_output_configuration_v1 *config) {
 	struct randr_state *state = data;
@@ -436,6 +583,7 @@ static const struct wl_registry_listener registry_listener = {
 static const struct option long_options[] = {
 	{"help", no_argument, 0, 'h'},
 	{"dryrun", no_argument, 0, 0},
+	{"json", no_argument, 0, 0},
 	{"output", required_argument, 0, 0},
 	{"on", no_argument, 0, 0},
 	{"off", no_argument, 0, 0},
@@ -663,6 +811,7 @@ static const char usage[] =
 	"usage: wlr-randr [options…]\n"
 	"--help\n"
 	"--dryrun\n"
+	"--json\n"
 	"--output <name>\n"
 	"  --on\n"
 	"  --off\n"
@@ -705,7 +854,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	bool changed = false, dry_run = false;
+	bool changed = false, dry_run = false, json = false;
 	struct randr_head *current_head = NULL;
 	while (1) {
 		int option_index = -1;
@@ -735,6 +884,8 @@ int main(int argc, char *argv[]) {
 			}
 		} else if (strcmp(name, "dryrun") == 0) {
 			dry_run = true;
+		} else if (strcmp(name, "json") == 0) {
+			json = true;
 		} else { // output sub-option
 			if (current_head == NULL) {
 				fprintf(stderr, "no --output specified before --%s\n", name);
@@ -751,6 +902,8 @@ int main(int argc, char *argv[]) {
 
 	if (changed) {
 		apply_state(&state, dry_run);
+	} else if (json) {
+		print_state_json(&state);
 	} else {
 		print_state(&state);
 	}
