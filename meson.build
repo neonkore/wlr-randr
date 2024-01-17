@@ -38,7 +38,7 @@ subdir('protocol')
 
 wlr_randr_exe = executable(
 	meson.project_name(),
-	files(['main.c']),
-	dependencies: [wayland_client, client_protos, math],
+	['main.c', protocol_src],
+	dependencies: [wayland_client, math],
 	install: true,
 )
