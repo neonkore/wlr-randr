@@ -1,7 +1,7 @@
 project(
 	'wlr-randr',
 	'c',
-	version : '0.3.1',
+	version : '0.4.0',
 	license : 'MIT',
 	meson_version : '>=0.51.0',
 	default_options : ['c_std=c99', 'warning_level=3', 'werror=true']
