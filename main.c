@@ -23,6 +23,14 @@ struct randr_mode {
 	bool preferred;
 };
 
+enum randr_head_prop {
+	RANDR_HEAD_MODE = 1 << 0,
+	RANDR_HEAD_POSITION = 1 << 1,
+	RANDR_HEAD_TRANSFORM = 1 << 2,
+	RANDR_HEAD_SCALE = 1 << 3,
+	RANDR_HEAD_ADAPTIVE_SYNC = 1 << 4,
+};
+
 struct randr_head {
 	struct randr_state *state;
 	struct zwlr_output_head_v1 *wlr_head;
@@ -33,6 +41,7 @@ struct randr_head {
 	int32_t phys_width, phys_height; // mm
 	struct wl_list modes;
 
+	uint32_t changed; // enum randr_head_prop
 	bool enabled;
 	struct randr_mode *mode;
 	struct {
@@ -328,24 +337,34 @@ static void apply_state(struct randr_state *state, bool dry_run) {
 
 		struct zwlr_output_configuration_head_v1 *config_head =
 			zwlr_output_configuration_v1_enable_head(config, head->wlr_head);
-		if (head->mode != NULL) {
-			zwlr_output_configuration_head_v1_set_mode(config_head,
-				head->mode->wlr_mode);
-		} else {
-			zwlr_output_configuration_head_v1_set_custom_mode(config_head,
-				head->custom_mode.width, head->custom_mode.height,
-				head->custom_mode.refresh);
+		if (head->changed & RANDR_HEAD_MODE) {
+			if (head->mode != NULL) {
+				zwlr_output_configuration_head_v1_set_mode(config_head,
+					head->mode->wlr_mode);
+			} else {
+				zwlr_output_configuration_head_v1_set_custom_mode(config_head,
+					head->custom_mode.width, head->custom_mode.height,
+					head->custom_mode.refresh);
+			}
 		}
-		zwlr_output_configuration_head_v1_set_position(config_head,
-			head->x, head->y);
-		zwlr_output_configuration_head_v1_set_transform(config_head,
-			head->transform);
-		zwlr_output_configuration_head_v1_set_scale(config_head,
-			wl_fixed_from_double(head->scale));
-
-		if (zwlr_output_manager_v1_get_version(state->output_manager) >= 4) {
-			zwlr_output_configuration_head_v1_set_adaptive_sync(config_head,
-				head->adaptive_sync_state);
+		if (head->changed & RANDR_HEAD_POSITION) {
+			zwlr_output_configuration_head_v1_set_position(config_head,
+				head->x, head->y);
+		}
+		if (head->changed & RANDR_HEAD_TRANSFORM) {
+			zwlr_output_configuration_head_v1_set_transform(config_head,
+				head->transform);
+		}
+		if (head->changed & RANDR_HEAD_SCALE) {
+			zwlr_output_configuration_head_v1_set_scale(config_head,
+				wl_fixed_from_double(head->scale));
+		}
+		if (head->changed & RANDR_HEAD_ADAPTIVE_SYNC) {
+			if (zwlr_output_manager_v1_get_version(state->output_manager) >=
+					ZWLR_OUTPUT_CONFIGURATION_HEAD_V1_SET_ADAPTIVE_SYNC_SINCE_VERSION) {
+				zwlr_output_configuration_head_v1_set_adaptive_sync(config_head,
+					head->adaptive_sync_state);
+			}
 		}
 	}
 
@@ -710,6 +729,7 @@ static bool parse_output_arg(struct randr_head *head,
 			return false;
 		}
 
+		head->changed |= RANDR_HEAD_MODE;
 		head->mode = mode;
 		head->custom_mode.width = 0;
 		head->custom_mode.height = 0;
@@ -729,6 +749,7 @@ static bool parse_output_arg(struct randr_head *head,
 			return false;
 		}
 
+		head->changed |= RANDR_HEAD_MODE;
 		head->mode = mode;
 		head->custom_mode.width = 0;
 		head->custom_mode.height = 0;
@@ -739,6 +760,7 @@ static bool parse_output_arg(struct randr_head *head,
 			return false;
 		}
 
+		head->changed |= RANDR_HEAD_MODE;
 		head->mode = NULL;
 		head->custom_mode.width = width;
 		head->custom_mode.height = height;
@@ -759,6 +781,7 @@ static bool parse_output_arg(struct randr_head *head,
 			return false;
 		}
 
+		head->changed |= RANDR_HEAD_POSITION;
 		head->x = x;
 		head->y = y;
 	} else if (strcmp(name, "transform") == 0) {
@@ -777,6 +800,8 @@ static bool parse_output_arg(struct randr_head *head,
 			fprintf(stderr, "invalid transform: %s\n", value);
 			return false;
 		}
+
+		head->changed |= RANDR_HEAD_TRANSFORM;
 	} else if (strcmp(name, "scale") == 0) {
 		char *end;
 		double scale = strtod(value, &end);
@@ -785,9 +810,11 @@ static bool parse_output_arg(struct randr_head *head,
 			return false;
 		}
 
+		head->changed |= RANDR_HEAD_SCALE;
 		head->scale = scale;
 	} else if (strcmp(name, "adaptive-sync") == 0) {
-		if (zwlr_output_head_v1_get_version(head->wlr_head) < 4) {
+		if (zwlr_output_head_v1_get_version(head->wlr_head) <
+				ZWLR_OUTPUT_CONFIGURATION_HEAD_V1_SET_ADAPTIVE_SYNC_SINCE_VERSION) {
 			fprintf(stderr, "setting adaptive sync not supported by the compositor\n");
 			return false;
 		}
@@ -799,6 +826,7 @@ static bool parse_output_arg(struct randr_head *head,
 			fprintf(stderr, "invalid adaptive sync state: %s\n", value);
 			return false;
 		}
+		head->changed |= RANDR_HEAD_ADAPTIVE_SYNC;
 	} else {
 		fprintf(stderr, "invalid option: %s\n", name);
 		return false;
