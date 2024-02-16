@@ -366,6 +366,7 @@ static void apply_state(struct randr_state *state, bool dry_run) {
 					head->adaptive_sync_state);
 			}
 		}
+		zwlr_output_configuration_head_v1_destroy(config_head);
 	}
 
 	if (dry_run) {
