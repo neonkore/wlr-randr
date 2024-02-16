@@ -360,11 +360,10 @@ static void apply_state(struct randr_state *state, bool dry_run) {
 				wl_fixed_from_double(head->scale));
 		}
 		if (head->changed & RANDR_HEAD_ADAPTIVE_SYNC) {
-			if (zwlr_output_manager_v1_get_version(state->output_manager) >=
-					ZWLR_OUTPUT_CONFIGURATION_HEAD_V1_SET_ADAPTIVE_SYNC_SINCE_VERSION) {
-				zwlr_output_configuration_head_v1_set_adaptive_sync(config_head,
-					head->adaptive_sync_state);
-			}
+			assert(zwlr_output_manager_v1_get_version(state->output_manager) >=
+				ZWLR_OUTPUT_CONFIGURATION_HEAD_V1_SET_ADAPTIVE_SYNC_SINCE_VERSION);
+			zwlr_output_configuration_head_v1_set_adaptive_sync(config_head,
+				head->adaptive_sync_state);
 		}
 		zwlr_output_configuration_head_v1_destroy(config_head);
 	}
